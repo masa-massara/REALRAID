@@ -10,10 +10,10 @@ const RegisterStartRootButton = () => {
     router.push("/register");
   };
   return (
-    <div className="flex flex-col items-end">
+    <div className="flex flex-col items-end mb-20">
       <button
         onClick={(e) => handleClick(e)}
-        className="button_middle_background "
+        className="button_middle_background"
       >
         <div className="button_middle_front">お名前登録へ</div>
       </button>

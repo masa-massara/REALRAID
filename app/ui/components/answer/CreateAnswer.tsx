@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
 	DndContext,
 	rectIntersection,
@@ -97,7 +97,7 @@ const CreateAnswer = () => {
 		setUsableCharacters(characterObj);
 	}, [teamname]);
 
-	const updateCorrect = async () => {
+	const updateCorrect = useCallback(async () => {
 		console.log("update");
 		// 部屋の参加人数とステータスを更新
 		console.log("Updating document for team identifier: ", teamIdentifier);
@@ -121,9 +121,9 @@ const CreateAnswer = () => {
 
 		// 部屋を監視
 		// RoomManagement(teamIdentifier);
-	};
+	}, [teamIdentifier]);
 
-	const checkAnswer = () => {
+	const checkAnswer = useCallback(() => {
 		for (let i = 0; i < correctWordsList.length; i++) {
 			if (answerStr === correctWordsList[i] && !allAnswer.includes(answerStr)) {
 				updateCorrect();
@@ -139,14 +139,14 @@ const CreateAnswer = () => {
 		// 解答欄を空にして使える文字をリセット
 		setAnswerItems([]);
 		setUsableItems(usableCharacters);
-	};
+	}, [answerStr, correctWordsList, allAnswer, updateCorrect, setAllAnswer, setCorrectCountRecoil, usableCharacters, setAnswerItems, setUsableItems]);
 
 	// answerStrの変更を監視してcheckAnswerを実行
 	useEffect(() => {
 		if (answerStr) {
 			checkAnswer();
 		}
-	}, [answerStr]);
+	}, [answerStr, checkAnswer]);
 
 	const handleSubmit = () => {
 		const tmpAnswer = answerItems.reduce((arr, item) => arr + item.content, "");
