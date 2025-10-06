@@ -1,0 +1,51 @@
+# REALRAID チーム名識別子移行 TODO
+
+## 背景
+- 現状は `teampasswordState`（数字パスワード）を部屋IDとして使用し、Supabase `Teams.team_id` に保存。
+- UI にはパスワード入力用のドラッグ&ドロップコンポーネントが多数存在し、チーム名入力と二重管理になっている。
+- 目標は「チーム名＝部屋識別子」とし、パスワードの概念を完全に排除する。
+- データベース（Supabase/Firebase）は初期化可能な前提。
+
+## TODO
+- [ ] Supabase スキーマ整理 ※ Supabase 側での再初期化・制約追加が必要
+  - [ ] `Teams` テーブルを初期化し、`team_id` をチーム識別子用に再定義（UUID or チーム名スラッグ）。
+  - [ ] `team_id` に UNIQUE 制約を付与し、`team_name` 表示用カラムの扱いを決定。
+  - [x] Realtime チャンネル命名規則（`team_members_<id>` 等）が slug で安全に動作するか確認。
+
+- [x] チーム識別子ユーティリティの実装
+  - [x] `teamname` から URL-safe な `teamIdentifier` を生成するヘルパーを新設。
+  - [x] 生成ルール（小文字化・スペース→ハイフン等）と衝突時の挙動を設計。
+
+- [x] 状態管理の刷新
+  - [x] `teampasswordState` を削除し、新たに `teamIdentifierState` を追加。
+  - [x] 登録フローで `teamname` 入力時に `teamIdentifier` を計算して state に保存。
+  - [x] すべての Recoil 参照箇所（`UserList`, `GameStartButton`, `JoinRoomButton`, `JumpThemeSelectionPageButton`, `CorrectList`, hooks など）を新 state に置換。
+
+- [x] ルーム作成/参加 UI の更新
+  - [x] `CreateRoomPass.tsx`, `InputRoomPass.tsx` などパスワード用コンポーネントを撤去またはリデザイン。
+  - [x] `room_create` / `room_join` ページの文言および導線をチーム名・識別子ベースに書き換え。
+  - [x] チーム識別子確認用の表示（例: コピーできる slug）を追加。
+
+- [x] Supabase 連携コード修正
+  - [x] `insertTeamInfo`, `addMemberToTeam`, `updateTeamStatus`, `getCorrectList` など `team_id` 参照箇所を `teamIdentifier` で統一。
+  - [x] 参加時・エラーメッセージを "チーム名" ベースに変更。
+
+- [x] Firebase 連携見直し
+  - [x] Firestore `rooms` コレクションのドキュメントIDをチーム識別子に変更。
+  - [x] `useCreateRoom` や関連リスナーで `teampassword` 前提のコードを更新。
+
+- [ ] リアルタイム購読・通知確認
+  - [x] Supabase Realtime チャンネル名 (`team_members_*`, `team_status_*`, `team_game_start_*`) を新識別子に置換。
+  - [ ] すべての購読が slug 変更に追従するか動作テスト。
+
+- [x] UI/文言リフレッシュ
+  - [x] "パスワード" 表記をすべて削除し、"チーム名" / "識別コード" に差し替え。
+  - [x] チュートリアルや説明文も更新。
+
+- [ ] 動作確認
+  - [ ] 登録→部屋作成→参加→テーマ選択→ゲーム開始の一連フローを新識別子で検証。
+  - [ ] Supabase/Firebase に生成されるデータを確認し、意図通りのキーで保存されているか確認。
+
+- [ ] 不要資産のクリーンアップ
+  - [x] 旧 UI コンポーネントや teampassword 関連ファイルを削除。
+  - [ ] `.env` などに残る不要な設定（例: `OPENAI_PROJECT_ID`）があれば整理。
