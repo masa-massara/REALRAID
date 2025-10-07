@@ -1,8 +1,5 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { db } from "@/app/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import RankingUsers from "./RankingUsers";
 import { getAllTeams } from "@/app/lib/supabase";
 
 interface RoomData {
@@ -77,11 +74,11 @@ const Ranking: React.FC = () => {
           index < 5 ? (
             <li key={room.id} className="ranking_list">
               <p className="lip1">
-                {index + 1}. Teamname: {" "}
+                {index + 1}. チーム名: {" "}
                 <span title={room.teamname}>{formatTeamName(room.teamname)}</span>
               </p>
               <p className="lip2">
-                Correct Answers: <span>{room.correct}</span>
+                正解数: <span>{room.correct}</span>
               </p>
             </li>
           ) : null

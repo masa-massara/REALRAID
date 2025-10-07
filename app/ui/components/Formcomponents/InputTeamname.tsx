@@ -33,6 +33,8 @@ const InputTeamname = () => {
 				} else {
 					setDuplicateError(null);
 				}
+			} else {
+				setDuplicateError(null);
 			}
 		};
 
@@ -49,7 +51,7 @@ const InputTeamname = () => {
 		setTeamname(value);
 		const nextIdentifier = generateTeamIdentifier(value);
 		setTeamIdentifier(nextIdentifier);
-		setIdentifierError(validateTeamIdentifier(nextIdentifier));
+		setIdentifierError(value ? validateTeamIdentifier(nextIdentifier) : null);
 	};
 
 	return (

@@ -14,10 +14,8 @@ import UsableCharacterColumn from "./UsableCharacterColumn";
 import { useRecoilState, useRecoilValue } from "recoil";
 import {
 	allAnswerState,
-	teamnameState,
 	teamIdentifierState,
 	userListState,
-	themeWordsState,
 	correctCountState,
 } from "@/app/states";
 import { useRouter } from "next/navigation";
@@ -25,7 +23,12 @@ import Timer from "../Timer";
 
 import styles from "../../../answer/Page.module.css";
 
-import { updateCorrectDB } from "@/app/lib/supabase";
+import {
+	getCorrectList,
+	updateCorrectDB,
+	updateCorrectList,
+	supabase,
+} from "@/app/lib/supabase";
 
 // アイテムの型定義
 type Item = {
@@ -35,148 +38,157 @@ type Item = {
 
 const CreateAnswer = () => {
 	// 状態管理用のフック
-	const [characters, setCharacters] = useState<string[]>([]);
 	const [usableCharacters, setUsableCharacters] = useState<Item[]>([]);
+	const [usableItems, setUsableItems] = useState<Item[]>([]);
+	const [answerItems, setAnswerItems] = useState<Item[]>([]);
 	const [error, setError] = useState<string>("");
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [lastMeaning, setLastMeaning] = useState<{ word: string; meaning: string } | null>(null);
 	const [allAnswer, setAllAnswer] = useRecoilState(allAnswerState);
-	const [answerStr, setAnswerStr] = useState("");
-	const correctWordsList = useRecoilValue(themeWordsState);
-
 	const [isCorrect, setIsCorrect] = useState<boolean>(false);
-	const [correctCountRecoil, setCorrectCountRecoil] = useRecoilState(correctCountState); // 正解数を管理する状態
+	const [correctCountRecoil, setCorrectCountRecoil] = useRecoilState(correctCountState);
 
-	// Recoil状態からチーム名を取得
-	const teamname = useRecoilValue(teamnameState);
+	const teamIdentifier = useRecoilValue(teamIdentifierState);
+	const userList = useRecoilValue(userListState);
 
-	// 初回レンダリング時に使用可能なキャラクターを設定
 	useEffect(() => {
-		console.log(usableCharacters);
 		setUsableItems(usableCharacters);
 	}, [usableCharacters]);
 
-	// チーム名が変更された時にデータベースからユーザー名を取得
-	// useEffect(() => {
-	//   const fetchNames = async () => {
-	//     if (!teamname) return;
-
-	//     const usersDocRef = doc(db, "users", teamname);
-	//     const docSnapshot = await getDoc(usersDocRef);
-	//     const names: string[] = [];
-
-	//     if (docSnapshot.exists()) {
-	//       const data = docSnapshot.data();
-	//       if (Array.isArray(data?.username)) {
-	//         data.username.forEach((name: string) => {
-	//           names.push(...name.split(""));
-	//         });
-	//       }
-	//     }
-
-	//     setCharacters(names);
-	//     const characterObj = names.map((character, key) => {
-	//       return { id: `usable-${key}`, content: character };
-	//     });
-	//     setUsableCharacters(characterObj);
-	//   };
-
-	//   fetchNames();
-	// }, [teamname]);
-
-	//↑上記の処理をRecoilから取得するように変更
-	//Recoilから参加者リストを取得、取得したものを一文字ずつに分割してアイテムに変換
-	const [userList, setUserList] = useRecoilState<string[]>(userListState);
 	useEffect(() => {
 		const names: string[] = [];
 		userList.forEach((name: string) => {
 			names.push(...name.split(""));
 		});
-		setCharacters(names);
-		const characterObj = names.map((character, key) => {
-			return { id: `usable-${key}`, content: character };
-		});
+		const characterObj = names.map((character, key) => ({
+			id: `usable-${key}`,
+			content: character,
+		}));
 		setUsableCharacters(characterObj);
-	}, [teamname]);
+	}, [userList]);
 
-	const updateCorrect = async () => {
-		console.log("update");
-		// 部屋の参加人数とステータスを更新
-		console.log("Updating document for team identifier: ", teamIdentifier);
-		// const roomsRef = doc(collection(db, "rooms"), teamIdentifier);
+	useEffect(() => {
+		let active = true;
+		const loadExistingAnswers = async () => {
+			if (!teamIdentifier) return;
+			try {
+				const existing = await getCorrectList(teamIdentifier);
+				if (!active) return;
+				if (Array.isArray(existing)) {
+					setAllAnswer(existing);
+					setCorrectCountRecoil(existing.length);
+				} else {
+					setAllAnswer([]);
+					setCorrectCountRecoil(0);
+				}
+			} catch (loadError) {
+				console.error("正解リストの取得に失敗しました", loadError);
+			}
+		};
+
+		loadExistingAnswers();
+		return () => {
+			active = false;
+		};
+	}, [teamIdentifier, setAllAnswer, setCorrectCountRecoil]);
+
+	useEffect(() => {
+		if (!teamIdentifier) return;
+		const channel = supabase
+			.channel(`team_ranking_${teamIdentifier}`)
+			.on(
+				"postgres_changes",
+				{
+					event: "UPDATE",
+					schema: "public",
+					table: "Teams",
+					filter: `team_id=eq.${teamIdentifier}`,
+				},
+				(payload) => {
+					const updated = (payload.new as { correct_list?: unknown })?.correct_list;
+					const nextList = Array.isArray(updated)
+						? (updated as string[])
+						: [];
+					setAllAnswer(nextList);
+					setCorrectCountRecoil(nextList.length);
+				}
+			)
+			.subscribe();
+
+		return () => {
+			channel.unsubscribe();
+		};
+	}, [teamIdentifier, setAllAnswer, setCorrectCountRecoil]);
+
+	const handleSubmit = async () => {
+		if (isSubmitting) return;
+		const candidate = answerItems.reduce((acc, item) => acc + item.content, "").trim();
+		if (!candidate) {
+			setError("文字をドラッグして回答を作成してください");
+			setLastMeaning(null);
+			return;
+		}
+		if (!teamIdentifier) {
+			setError("チーム識別子が見つかりません");
+			setLastMeaning(null);
+			return;
+		}
+		if (allAnswer.includes(candidate)) {
+			setError("この単語は既に回答済みです");
+			setAnswerItems([]);
+			setUsableItems(usableCharacters);
+			setLastMeaning(null);
+			return;
+		}
+
+		setIsSubmitting(true);
+		setError("");
+		setLastMeaning(null);
 
 		try {
-			await updateCorrectDB(teamIdentifier);
-			// const docSnapshot = await getDoc(roomsRef);
-			// const data = docSnapshot.data();
-			// if (data) {
-			//   const newCountCorrect = Number(data.correct) + 1;
-			//   await updateDoc(roomsRef, {
-			//     correct: newCountCorrect,
-			//   });
-			//   console.log(newCountCorrect);
-			// }
-		} catch (error) {
-			console.error("Error updating document: ", error);
-			setError("部屋の更新中にエラーが発生しました");
-		}
-
-		// 部屋を監視
-		// RoomManagement(teamIdentifier);
-	};
-
-	const checkAnswer = () => {
-		for (let i = 0; i < correctWordsList.length; i++) {
-			if (answerStr === correctWordsList[i] && !allAnswer.includes(answerStr)) {
-				updateCorrect();
-				setAllAnswer([...allAnswer, answerStr]);
-				setCorrectCountRecoil((prevCount) => prevCount + 1); // 正解数を更新
-				console.log("正解です");
-				// 正解時にアニメーションをトリガー
-				setIsCorrect(true);
-				setTimeout(() => setIsCorrect(false), 1000); // 1秒後にアニメーションを終了
-				break;
+			const response = await fetch("/api/validate-word", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ word: candidate }),
+			});
+			const data = await response.json();
+			if (!response.ok || !data?.valid) {
+				const reason = data?.reason ?? "この単語は認められませんでした";
+				setError(reason);
+				return;
 			}
-		}
-		// 解答欄を空にして使える文字をリセット
-		setAnswerItems([]);
-		setUsableItems(usableCharacters);
-	};
 
-	// answerStrの変更を監視してcheckAnswerを実行
-	useEffect(() => {
-		if (answerStr) {
-			checkAnswer();
-		}
-	}, [answerStr]);
+			const nextAnswers = [...allAnswer, candidate];
+			await updateCorrectList(nextAnswers, teamIdentifier);
+			await updateCorrectDB(teamIdentifier);
 
-	const handleSubmit = () => {
-		const tmpAnswer = answerItems.reduce((arr, item) => arr + item.content, "");
-		setAnswerStr(tmpAnswer);
+			setAllAnswer(nextAnswers);
+			setCorrectCountRecoil(nextAnswers.length);
+			setIsCorrect(true);
+			setTimeout(() => setIsCorrect(false), 1000);
+			setLastMeaning({ word: candidate, meaning: data.meaning ?? "" });
+			setAnswerItems([]);
+			setUsableItems(usableCharacters);
+		} catch (submitError) {
+			console.error("回答の送信に失敗しました", submitError);
+			setError(
+				submitError instanceof Error
+					? submitError.message
+					: "回答の送信に失敗しました"
+			);
+			setLastMeaning(null);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	// 時間切れの状態管理とルーターの設定
-	const [isTimeUp, setIsTimeUp] = useState<boolean>(false);
 	const router = useRouter();
 
 	// 時間切れ時の処理
 	const handleTimeUp = () => {
-		setIsTimeUp(true);
-		console.log("時間切れです");
-		// 時間切れ時の処理をここに追加
 		router.push("/result");
 	};
-
-	// 回答アイテムの状態管理
-	const [answerItems, setAnswerItems] = useState<Item[]>([]);
-	const [teamIdentifier, _setTeamIdentifier] = useRecoilState<string>(teamIdentifierState);
-	const [usableItems, setUsableItems] = useState<Item[]>(usableCharacters);
-
-	// 回答アイテムから回答文字列を生成
-	const answeredItems = answerItems.map((item) => item.content);
-	const passPhrase = answeredItems.reduce((arr, character) => arr + character, "");
-
-	useEffect(() => {
-		console.log("teamIdentifier updated: ", teamIdentifier);
-	}, [teamIdentifier]);
 
 	const sensors = useSensors(useSensor(MouseSensor), useSensor(TouchSensor));
 
@@ -243,7 +255,7 @@ const CreateAnswer = () => {
 					</div>
 					<div className={styles.lettersSection}>
 						<p className={styles.helperText}>
-							文字をひっぱて並べ替えて、「ことば」を作ろう！{" "}
+							文字をドラッグして並べ替え、ことばを作ろう！
 						</p>
 						<UsableCharacterColumn items={usableItems} />
 					</div>
@@ -251,9 +263,9 @@ const CreateAnswer = () => {
 						<button
 							onClick={handleSubmit}
 							className={styles.submitButton}
-							disabled={answerItems.length === 0}
+							disabled={answerItems.length === 0 || isSubmitting}
 						>
-							回答を送信
+							{isSubmitting ? "判定中..." : "回答を送信"}
 						</button>
 						<div className={styles.correctBadge}>
 							<span className={styles.correctLabel}>正解数</span>
@@ -261,6 +273,14 @@ const CreateAnswer = () => {
 						</div>
 					</div>
 					{error && <p className={styles.error}>{error}</p>}
+					{lastMeaning && !error && (
+						<div className={styles.meaningCard}>
+							<p className={styles.meaningWord}>{lastMeaning.word}</p>
+							<p className={styles.meaningText}>
+								{lastMeaning.meaning || "意味の説明は取得できませんでした"}
+							</p>
+						</div>
+					)}
 				</div>
 			</div>
 		</DndContext>

@@ -11,19 +11,19 @@ const UserList: React.FC = () => {
   const teamIdentifier = useRecoilValue(teamIdentifierState);
 
   useEffect(() => {
-    // 非同期でgetMembers関数を呼び出し
-    const fetchMembers = async (team_id: string) => {
-      const members = await getMembers(team_id);
-      if (members) {
+    if (!teamIdentifier) return;
+    const fetchMembers = async (teamId: string) => {
+      const members = await getMembers(teamId);
+      if (Array.isArray(members)) {
         setUserList(members);
       }
     };
 
     fetchMembers(teamIdentifier);
-  }, [teamIdentifier]);
+  }, [teamIdentifier, setUserList]);
 
   useEffect(() => {
-    console.log("teamIdentifier", teamIdentifier);
+    if (!teamIdentifier) return;
     const memberSubscription = supabase
       .channel(`team_members_${teamIdentifier}`)
       .on(
@@ -35,19 +35,18 @@ const UserList: React.FC = () => {
           filter: `team_id=eq.${teamIdentifier}`,
         },
         (payload) => {
-          console.log("payload member", payload.new.members);
-          setUserList(payload.new.members);
+          const members = (payload.new as { members?: unknown })?.members;
+          if (Array.isArray(members)) {
+            setUserList(members as string[]);
+          }
         }
       )
       .subscribe();
-    console.log("subscription", memberSubscription);
-    // クリーンアップ関数
+
     return () => {
       memberSubscription.unsubscribe();
     };
-  }, [teamIdentifier]);
-
-  console.log(userList);
+  }, [teamIdentifier, setUserList]);
 
   return (
     <div>

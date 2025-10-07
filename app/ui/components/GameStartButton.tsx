@@ -15,7 +15,6 @@ const GameStartButton: React.FC = () => {
 
   useEffect(() => {
     if (!teamIdentifier) return;
-    console.log("teamIdentifier", teamIdentifier);
     const stautsSubscription = supabase
       .channel(`team_status_${teamIdentifier}`)
       .on(
@@ -27,14 +26,12 @@ const GameStartButton: React.FC = () => {
           filter: `team_id=eq.${teamIdentifier}`,
         },
         (payload) => {
-          console.log("payload status", payload.new.status);
           if (payload.new.status === "started") {
             router.push(`/answer`);
           }
         }
       )
       .subscribe();
-    console.log("subscription", stautsSubscription);
     // クリーンアップ関数
     return () => {
       stautsSubscription.unsubscribe();
@@ -74,7 +71,9 @@ const GameStartButton: React.FC = () => {
   };
 
   if (!isCreator) {
-    return null;
+    return (
+      <p className={styles.notice}>ホストがゲームを開始するまでお待ちください</p>
+    );
   }
 
   return (

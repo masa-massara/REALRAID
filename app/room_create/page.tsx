@@ -1,6 +1,6 @@
 import React from "react";
 import styles from "./Page.module.css";
-import Teamname from "../ui/components/Teamname";
+import TeamIdentifierInput from "../ui/components/TeamIdentifierInput";
 import CreateRoomButton from "../ui/components/CreateRoomButton";
 
 const Page = () => {
@@ -13,9 +13,12 @@ const Page = () => {
 			</p>
 			<div className={styles.teamInfo}>
 				<h2 className={styles.sectionTitle}>チーム名</h2>
-				<p className={styles.teamNameValue}>
-					<Teamname />
-				</p>
+				<TeamIdentifierInput
+					inputClassName={styles.input}
+					errorClassName={styles.error}
+					helperClassName={styles.helper}
+					helperText="チーム名を入力すると共有用の識別コードが自動生成されます"
+				/>
 			</div>
 			<CreateRoomButton />
 		</div>

@@ -13,6 +13,7 @@ type Props = {
   inputClassName?: string;
   errorClassName?: string;
   helperText?: string;
+  helperClassName?: string;
 };
 
 const TeamIdentifierInput: React.FC<Props> = ({
@@ -21,6 +22,7 @@ const TeamIdentifierInput: React.FC<Props> = ({
   inputClassName,
   errorClassName,
   helperText,
+  helperClassName,
 }) => {
   const [teamname, setTeamname] = useRecoilState(teamnameState);
   const setTeamIdentifier = useSetRecoilState(teamIdentifierState);
@@ -30,7 +32,7 @@ const TeamIdentifierInput: React.FC<Props> = ({
     setTeamname(value);
     const nextIdentifier = generateTeamIdentifier(value);
     setTeamIdentifier(nextIdentifier);
-    setIdentifierError(validateTeamIdentifier(nextIdentifier));
+    setIdentifierError(value ? validateTeamIdentifier(nextIdentifier) : null);
   };
 
   return (
@@ -43,7 +45,7 @@ const TeamIdentifierInput: React.FC<Props> = ({
         placeholder={placeholder}
         className={inputClassName}
       />
-      {helperText && <p>{helperText}</p>}
+      {helperText && <p className={helperClassName}>{helperText}</p>}
       {identifierError && (
         <p className={errorClassName}>{identifierError}</p>
       )}

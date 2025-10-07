@@ -116,14 +116,12 @@ export const updateTeamStatus = async (
   teamIdentifier: string,
   status: string
 ) => {
-  console.log("[supabase] updateTeamStatus", { teamIdentifier, status });
   const { error } = await supabase
     .from("Teams")
     .update({ status: status })
     .eq("team_id", teamIdentifier);
 
   if (error) {
-    console.error("[supabase] updateTeamStatus error", error);
     throw new Error("Error updating team status:" + error.message);
   }
 };

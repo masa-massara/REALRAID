@@ -205,6 +205,29 @@
   text-align: center;
 }
 
+.meaningCard {
+  margin-top: 12px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 14px 28px rgba(74, 63, 169, 0.18);
+  border: 1px solid rgba(126, 140, 255, 0.25);
+  text-align: left;
+}
+
+.meaningWord {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c2d59;
+}
+
+.meaningText {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(45, 48, 88, 0.85);
+}
+
 @media (max-width: 480px) {
   .panel {
     border-radius: 24px;

@@ -8,13 +8,17 @@ const Timer: React.FC<TimerProps> = ({ onTimeUp }) => {
   const [time, setTime] = useState<number>(60); // 60秒のタイマー
 
   useEffect(() => {
-    if (time > 0) {
-      const timerId = setInterval(() => setTime(time - 1), 1000);
-      return () => clearInterval(timerId);
-    } else {
+    if (time <= 0) {
       onTimeUp();
+      return;
     }
-  }, [time]);
+
+    const timerId = setTimeout(() => {
+      setTime((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timerId);
+  }, [time, onTimeUp]);
 
   return (
     <p className="timer_time">

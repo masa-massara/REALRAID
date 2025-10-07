@@ -22,57 +22,69 @@ if (projectId?.startsWith("proj_")) {
 
 const openai = new OpenAI(clientOptions);
 
-const themeWordsSchema = {
-  name: "theme_words_schema",
+const wordValidationSchema = {
+  name: "word_validation_schema",
   schema: {
     type: "object",
     properties: {
-      words: {
-        type: "array",
-        items: {
-          type: "string",
-          description: "The words related to the given theme",
-        },
+      valid: { type: "boolean" },
+      reason: {
+        type: "string",
+        description:
+          "短い説明。invalid のときにユーザーへ表示されるメッセージ。",
+      },
+      meaning: {
+        type: "string",
+        description:
+          "単語が有効な場合の簡潔な意味説明。無効な場合は空文字列。",
       },
     },
-    required: ["words"],
+    required: ["valid", "reason", "meaning"],
     additionalProperties: false,
   },
 } as const;
 
-export const ReturnThemeJSONData = async (
-  theme: string
-): Promise<{ words: string[] } | null> => {
+export const validateWordWithAI = async (
+  word: string
+): Promise<{ valid: boolean; reason: string; meaning: string }> => {
   const completion = await openai.chat.completions.create({
     model: "gpt-4.1-mini",
     messages: [
       {
         role: "system",
         content:
-          "ユーザーに与えられたテーマに基づいて、テーマに関連する単語のJSONデータを生成してください。例: テーマが「ハロウィン」の場合、ハロウィンに関連する単語をJSONデータで返してください。単語は全部で500個以上生成してください。単語はすべてひらがなで生成してください。",
+          "あなたは日本語の単語判定アシスタントです。ユーザーから渡された文字列が日本語の自然な単語（名詞・動詞・形容詞・擬音語など）として成立しているかを判断し、JSONで回答してください。有効な単語であれば、その単語の意味を短い日本語で説明してください。スラングや造語でも一般的に理解できるものであれば有効とし、ひらがな・カタカナ・漢字以外の文字が多い場合や単語として成立していない場合は無効としてください。",
       },
       {
         role: "user",
-        content: theme,
+        content: word,
       },
     ],
     response_format: {
       type: "json_schema",
-      json_schema: themeWordsSchema,
+      json_schema: wordValidationSchema,
     },
   });
 
   const rawContent = completion.choices?.[0]?.message?.content;
 
   if (!rawContent) {
-    throw new Error("テーマデータがnullで返ってきました。");
+    throw new Error("単語の判定に失敗しました");
   }
 
-  const themeData = JSON.parse(rawContent) as { words?: unknown };
+  const payload = JSON.parse(rawContent) as {
+    valid?: unknown;
+    reason?: unknown;
+    meaning?: unknown;
+  };
 
-  if (themeData && Array.isArray(themeData.words)) {
-    return themeData as { words: string[] };
-  }
+  const valid = typeof payload.valid === "boolean" ? payload.valid : false;
+  const reason = typeof payload.reason === "string" ? payload.reason : "";
+  const meaning = typeof payload.meaning === "string" ? payload.meaning : "";
 
-  return null;
+  return {
+    valid,
+    reason: reason || (valid ? "" : "この単語は無効と判定されました"),
+    meaning: valid ? meaning : "",
+  };
 };
